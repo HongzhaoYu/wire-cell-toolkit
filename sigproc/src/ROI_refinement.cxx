@@ -1800,7 +1800,7 @@ void ROI_refinement::ShrinkROIs(int plane, ROI_formation& roi_form){
   }
 }
 
-void ROI_refinement::BreakROI(SignalROI *roi, float rms) {
+void ROI_refinement::BreakROI(SignalROI *roi, float rms, int loopTag) {
 
   auto protected_zones =
       proteced_rois.equal_range({roi->get_chid(), roi->get_start_bin()});
@@ -1826,6 +1826,15 @@ void ROI_refinement::BreakROI(SignalROI *roi, float rms) {
     //    htemp->SetBinContent(i+1,contents.at(i));
   }
   
+  bool print_flag = false;
+  // if (roi->get_chid()==1541 && start_bin>1700 && end_bin<2100) print_flag = true; // v0 wct_id 858
+  // if (roi->get_chid()==102 && start_bin>2000 && end_bin<3000) print_flag = true; // u1 wct_id 3062
+  // if (roi->get_chid()==1093 && start_bin>2000 && end_bin<3500) print_flag = true; // v1 remaining tear drop
+  if (print_flag) {
+    std::cout << "break" << loopTag << "_debugInfo_start_bin " << start_bin << std::endl;
+  }
+  Waveform::realseq_t print_signal0 = temp_signal;
+
   // float th_peak = 3.0;
   // float sep_peak = 6.0;
   float low_peak_sep_threshold = low_peak_sep_threshold_pre; // electrons
@@ -1939,20 +1948,31 @@ void ROI_refinement::BreakROI(SignalROI *roi, float rms) {
       // 	}
       // }
 	
+       if (print_flag) {
+         for (int i=0;i!=npeaks+1;i++) {
+           std::cout << "break" << loopTag << "_debugInfo_valley_pos[" << i << "]\t" << valley_pos[i] << std::endl;
+         }
+       }
 
       
       // need to organize the peaks and valleys ... 
       float valley_pos1[205];
       float peak_pos1[205];
       int npeaks1 = 0;
+      int tick_distance = 10;
+      std::set<int> valley_pos2;
+      int hz_l_valley=-1;
+      int hz_r_valley=-1;
       // fill in the first valley;
       valley_pos1[0] = valley_pos[0];
+      if (print_flag) std::cout << "break" << loopTag << "_step0 valley_pos1[0] = " << valley_pos[0] << std::endl;
       for (int j=0;j<npeaks;j++){
   	if (npeaks1 >0){
 	  //std::cout << valley_pos[j]-start_bin << " " << valley_pos1[npeaks1]-start_bin << std::endl;
   	  // find the lowest valley except the first peak, except the first one
   	  if (temp_signal.at(valley_pos[j]-start_bin) < temp_signal.at(valley_pos1[npeaks1]-start_bin)){
   	    valley_pos1[npeaks1] = valley_pos[j];
+            if (print_flag) std::cout << "break" << loopTag << "_step1 valley_pos1[" << npeaks1 << "] = " << valley_pos[j] << std::endl;
   	  }
 	}
 	
@@ -1963,18 +1983,41 @@ void ROI_refinement::BreakROI(SignalROI *roi, float rms) {
   	// find the next peak
    	if (temp_signal.at(order_peak_pos[j]-start_bin) - temp_signal.at(valley_pos1[npeaks1]-start_bin) > low_peak_sep_threshold){
    	  peak_pos1[npeaks1] = order_peak_pos[j] ;
+          if (print_flag) std::cout << "break" << loopTag << "_step2 peak_pos1[" << npeaks1 << "] = " << order_peak_pos[j] << std::endl;
    	  npeaks1 ++;
    	  int flag1 = 0;
+          hz_l_valley=-1;
+          if (temp_signal.at(order_peak_pos[j]-start_bin) - temp_signal.at(valley_pos[j]-start_bin) > low_peak_sep_threshold) { hz_l_valley=valley_pos[j]; }
 
    	  for (int k=j+1;k!=npeaks+1;k++){
    	    // find the highest peak before ... 
    	    if (k<=npeaks){
-   	      if (temp_signal.at(order_peak_pos[k-1]-start_bin) > temp_signal.at(peak_pos1[npeaks1-1]-start_bin))
+   	      if (temp_signal.at(order_peak_pos[k-1]-start_bin) > temp_signal.at(peak_pos1[npeaks1-1]-start_bin)) {
    		peak_pos1[npeaks1-1] = order_peak_pos[k-1];
+                if (print_flag) std::cout << "break" << loopTag << "_step3 peak_pos1[" << npeaks1-1 << "] = " << order_peak_pos[k-1] << std::endl; }
+                hz_l_valley=-1;
+                if (temp_signal.at(order_peak_pos[k-1]-start_bin) - temp_signal.at(valley_pos[k-1]-start_bin) > low_peak_sep_threshold) { hz_l_valley=valley_pos[k-1]; }
 	    }
 	    
    	    if (temp_signal.at(peak_pos1[npeaks1-1]-start_bin) - temp_signal.at(valley_pos[k]-start_bin) > low_peak_sep_threshold){
+              // if (print_flag) {
+              if (hz_r_valley>=0 &&
+                  fabs(hz_r_valley-valley_pos1[npeaks1-1])>tick_distance &&
+                  fabs(temp_signal.at(hz_r_valley-start_bin)-temp_signal.at(valley_pos1[npeaks1-1]-start_bin))<th_peak*rms) {
+                  // std::cout << "break" << loopTag << "_add_r_valley " << hz_r_valley << std::endl;
+                  valley_pos2.insert(hz_r_valley);            
+              }
+              if (hz_l_valley>=0 &&
+                  fabs(hz_l_valley-valley_pos1[npeaks1-1])>tick_distance &&
+                  fabs(temp_signal.at(hz_l_valley-start_bin)-temp_signal.at(valley_pos1[npeaks1-1]-start_bin))<th_peak*rms) {
+                  // std::cout << "break" << loopTag << "_add_l_valley " << hz_l_valley << std::endl;
+                  valley_pos2.insert(hz_l_valley);
+              }
+              if (hz_l_valley>=0 && temp_signal.at(hz_l_valley-start_bin)>20*rms) valley_pos2.insert(hz_l_valley);
+              // }
+              hz_r_valley = valley_pos[k];
 	      valley_pos1[npeaks1] = valley_pos[k];
+              if (print_flag) std::cout << "break" << loopTag << "_step4 valley_pos1[" << npeaks1 << "] = " << valley_pos[k] << std::endl;
   	      j = k-1;
   	      flag1 = 1;
   	      break;
@@ -1982,16 +2025,44 @@ void ROI_refinement::BreakROI(SignalROI *roi, float rms) {
   	    // find the next valley
    	  }
   	  if (flag1 == 0){
+            // if (print_flag) {
+            if (hz_r_valley>=0 &&
+                fabs(hz_r_valley-valley_pos1[npeaks1-1])>tick_distance &&
+                fabs(temp_signal.at(hz_r_valley-start_bin)-temp_signal.at(valley_pos1[npeaks1-1]-start_bin))<th_peak*rms) {
+                // std::cout << "break" << loopTag << "_add_r_valley " << hz_r_valley << std::endl;
+                valley_pos2.insert(hz_r_valley);            
+            }
+            if (hz_l_valley>=0 &&
+                fabs(hz_l_valley-valley_pos1[npeaks1-1])>tick_distance &&
+                fabs(temp_signal.at(hz_l_valley-start_bin)-temp_signal.at(valley_pos1[npeaks1-1]-start_bin))<th_peak*rms) {
+                // std::cout << "break" << loopTag << "_add_l_valley " << hz_l_valley << std::endl;
+                valley_pos2.insert(hz_l_valley);
+            }
+            // }
    	    valley_pos1[npeaks1] = valley_pos[npeaks];
    	    j = npeaks;
+            if (print_flag) std::cout << "break" << loopTag << "_step5 valley_pos1[" << npeaks1 << "] = " << valley_pos[npeaks] << std::endl;
 	  }
 
 	  // if (roi->get_chid() == 1240 && roi->get_plane() == 0)
 	  //   std::cout << "c: " << npeaks << " " << valley_pos1[npeaks1-1] << " " << peak_pos1[npeaks1-1] << " " << valley_pos1[npeaks1] << " " << rms * sep_peak << std::endl;
-	}
+	} else { // Hongzhao: a long tail at the end from the last peak
+          if (j==npeaks-1 && hz_r_valley>=0) {
+            // if (print_flag) std::cout << "hyu1boom!" << std::endl;
+            float min_Idx = valley_pos1[npeaks1];
+            float min_Val = temp_signal.at(valley_pos1[npeaks1]-start_bin);
+            float temp_Val = temp_signal.at(valley_pos[npeaks]-start_bin);
+            if (temp_Val<min_Val) { min_Val = temp_Val; min_Idx = valley_pos[npeaks]; }
+            if (fabs(hz_r_valley-min_Idx)>tick_distance && fabs(temp_signal.at(hz_r_valley-start_bin)-min_Val)<th_peak*rms) {
+              // std::cout << "break" << loopTag << "_add_r_valley " << hz_r_valley << std::endl;
+              valley_pos2.insert(hz_r_valley);
+            }       
+          }
+        }
       }
       // fill the last valley
       valley_pos1[npeaks1] = valley_pos[npeaks];
+      if (print_flag) std::cout << "break" << loopTag << "_step6 valley_pos1[" << npeaks1 << "] =" << valley_pos[npeaks] << std::endl;
       //std::cout << roi->get_plane() << " " << roi->get_chid() << " " << npeaks << " " << npeaks1 << " " ;
       //std::cout << start_bin << " " << end_bin << std::endl;
 
@@ -2002,6 +2073,18 @@ void ROI_refinement::BreakROI(SignalROI *roi, float rms) {
         valley_pos1[0] = valley_pos[0];
         valley_pos1[1] = valley_pos[npeaks];
       }
+      
+      // if (print_flag) {
+      for (int j=0;j<=npeaks1;j++){
+        valley_pos2.insert(valley_pos1[j]);
+      }
+      npeaks1=0;
+      for (auto it=valley_pos2.begin();it!=valley_pos2.end();it++) {
+        // std::cout << "test" << loopTag << "_valley\t" << *it << std::endl;
+        valley_pos1[npeaks1++] = *it; 
+      }
+      npeaks1--;
+      // }
 
       // multi-plane protection
       std::vector<bool> section_protected;
@@ -2118,6 +2201,13 @@ void ROI_refinement::BreakROI(SignalROI *roi, float rms) {
   	}
 	
       }
+
+
+       if (print_flag) {
+         for (int i=0;i!=npeaks1+1;i++) {
+           std::cout << "break" << loopTag << "_debugInfo_valley_pos1[" << i << "]\t" << valley_pos1[i] << std::endl;
+         }
+       }
       // } // if (1151)
 
     }
@@ -2125,6 +2215,8 @@ void ROI_refinement::BreakROI(SignalROI *roi, float rms) {
 
   //std::cout << "kaka3 " << std::endl;
   
+  Waveform::realseq_t print_signal1 = temp_signal;
+  Waveform::realseq_t print_signal2(temp_signal.size(), 0);
   
   // if (roi->get_chid() == 1151){
   //   std::cout << "Break:  "  << roi->get_chid() << " " << start_bin << " " << end_bin << " " << nfound << std::endl;
@@ -2179,6 +2271,15 @@ void ROI_refinement::BreakROI(SignalROI *roi, float rms) {
       // 	std::cout << bin_min+start_bin << std::endl;
       
       saved_b.push_back(bin_min);
+
+       if (print_flag) {
+         std::cout << "break" << loopTag << "_debugInfo_saved_b" << qx << "[" << i << "]\t" 
+                   << start+start_bin << "\t" 
+                   << saved_b.back()+start_bin << "\t"
+                   << end+start_bin << "\t"
+                   << std::endl;
+       }
+
     }
 
     {
@@ -2242,6 +2343,11 @@ void ROI_refinement::BreakROI(SignalROI *roi, float rms) {
         }
       }
     }
+    if (qx==0) {
+      for (int i=0;i!=int(temp_signal.size());i++){
+        print_signal2.at(i) = temp_signal.at(i);//htemp->GetBinContent(i+1);
+      }        
+    }
   }
 
   // std::cout << "kaka6 " << std::endl;
@@ -2253,7 +2359,19 @@ void ROI_refinement::BreakROI(SignalROI *roi, float rms) {
   
   //  delete s;
   //  delete htemp;
-   
+  if (print_flag) {
+    std::cout << "break" << loopTag << "_debugInfo_th_factor*rms " << th_factor*rms << std::endl;
+    std::cout << "break" << loopTag << "_debugInfo_end_bin " << end_bin << std::endl;
+    std::cout << "break" << loopTag << "_debugInfo" << std::endl;
+    for (unsigned int i=0;i!=temp_signal.size();i++) {
+      std::cout << "break" << loopTag << "_debugSpec_ROI_content " << i+start_bin << " "
+                << print_signal0.at(i) << "\t"
+                << print_signal1.at(i) << "\t"
+                << print_signal2.at(i) << "\t"
+                << contents.at(i) << "\t"
+                << std::endl;
+    }
+  }   
 }
 
 void ROI_refinement::BreakROI1(SignalROI *roi){
@@ -2372,7 +2490,7 @@ void ROI_refinement::BreakROI1(SignalROI *roi){
   //  delete htemp;
 }
 
-void ROI_refinement::BreakROIs(int plane, ROI_formation& roi_form){
+void ROI_refinement::BreakROIs(int plane, ROI_formation& roi_form, int loopTag){
   SignalROISelection all_rois;
 
   if (plane==0){
@@ -2380,7 +2498,7 @@ void ROI_refinement::BreakROIs(int plane, ROI_formation& roi_form){
     for (size_t i=0;i!=rois_u_loose.size();i++){
       for (auto it = rois_u_loose.at(i).begin(); it!= rois_u_loose.at(i).end(); it++){
 	
-	BreakROI(*it,rms_u.at(i));
+	BreakROI(*it,rms_u.at(i), loopTag);
 	all_rois.push_back(*it);
 	
       }
@@ -2389,7 +2507,7 @@ void ROI_refinement::BreakROIs(int plane, ROI_formation& roi_form){
     std::vector<float>& rms_v = roi_form.get_vplane_rms();
     for (size_t i=0;i!=rois_v_loose.size();i++){
       for (auto it = rois_v_loose.at(i).begin(); it!= rois_v_loose.at(i).end(); it++){
-	BreakROI(*it,rms_v.at(i));
+	BreakROI(*it,rms_v.at(i), loopTag);
 	all_rois.push_back(*it);
       }
     }
@@ -2424,7 +2542,7 @@ void ROI_refinement::refine_data(int plane, ROI_formation& roi_form){
   
   for (int qx = 0; qx!=break_roi_loop; qx++){
     // std::cout << "Break loose ROIs" << std::endl;
-    BreakROIs(plane, roi_form);
+    BreakROIs(plane, roi_form, 44);
     // std::cout << "Clean up ROIs 2nd time" << std::endl;
     CheckROIs(plane, roi_form);
     CleanUpROIs(plane);
@@ -2467,7 +2585,7 @@ void ROI_refinement::refine_data_debug_mode(int plane, ROI_formation& roi_form, 
 
   else if (cmd=="BreakROIs") {
     // std::cout << "Break loose ROIs" << std::endl;
-    BreakROIs(plane, roi_form);
+    BreakROIs(plane, roi_form, 44);
     // std::cout << "Clean up ROIs 2nd time" << std::endl;
     CheckROIs(plane, roi_form);
     CleanUpROIs(plane);

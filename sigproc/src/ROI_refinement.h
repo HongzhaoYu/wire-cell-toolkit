@@ -48,8 +48,8 @@ namespace WireCell{
       void ShrinkROIs(int plane, ROI_formation& roi_form);
       void ShrinkROI(SignalROI *roi, ROI_formation& roi_form);
 
-      void BreakROIs(int plane, ROI_formation& roi_form);
-      void BreakROI(SignalROI *roi, float rms);
+      void BreakROIs(int plane, ROI_formation& roi_form, int loopTag);
+      void BreakROI(SignalROI *roi, float rms, int loopTag);
       void BreakROI1(SignalROI *roi);
       
       void ExtendROIs(int plane);
@@ -107,6 +107,7 @@ namespace WireCell{
       Log::logptr_t log;
 
       bool isWrapped;
+      bool print_flip = false;
     };
   }
 }

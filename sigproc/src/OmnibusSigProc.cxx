@@ -1375,7 +1375,7 @@ bool OmnibusSigProc::operator()(const input_pointer& in, output_pointer& out)
     const std::vector<float>& perwire_rmses = *perplane_thresholds[iplane];
 
     for (int qx = 0; qx != m_r_break_roi_loop; qx++) {
-      roi_refine.BreakROIs(iplane, roi_form);
+      roi_refine.BreakROIs(iplane, roi_form, qx);
       roi_refine.CheckROIs(iplane, roi_form);
       roi_refine.CleanUpROIs(iplane);
       if (m_use_roi_debug_mode) {
