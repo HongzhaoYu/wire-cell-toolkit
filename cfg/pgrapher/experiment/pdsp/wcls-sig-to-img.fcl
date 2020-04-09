@@ -31,7 +31,8 @@ physics :{
 
             params : {
                // This locates the input raw::RawDigit collection in the art::Event 
-               sig_input_label: "raw2sig:gauss"
+               // sig_input_label: "raw2sig:gauss"
+               sig_input_label: "nfspl1:gauss"
 
                // do the BlobReframer
                use_blob_reframer: "false"
