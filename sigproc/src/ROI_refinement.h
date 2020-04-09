@@ -56,6 +56,10 @@ namespace WireCell{
 
       void TestROIs();
 
+      void PrintLooseROIs(int plane, const std::string tag);
+      void PrintTightROIs(int plane, const std::string tag);
+      void PrintROI(SignalROI *roi, const std::string& tag);
+
       void apply_roi(int plane, Array::array_xxf& r_data);
       
       SignalROIChList& get_u_rois(){return rois_u_loose;};

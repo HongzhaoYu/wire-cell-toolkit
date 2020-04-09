@@ -1359,7 +1359,10 @@ bool OmnibusSigProc::operator()(const input_pointer& in, output_pointer& out)
 
     roi_refine.CleanUpROIs(iplane);
     roi_refine.generate_merge_ROIs(iplane);
-
+    if (iplane==1) {
+      // roi_refine.PrintTightROIs(iplane, "tight");
+      // roi_refine.PrintLooseROIs(iplane, "step0");
+    }
     if (m_use_roi_debug_mode) {
       save_roi(*itraces, cleanup_roi_traces, iplane,
                roi_refine.get_rois_by_plane(iplane));
@@ -1376,8 +1379,10 @@ bool OmnibusSigProc::operator()(const input_pointer& in, output_pointer& out)
 
     for (int qx = 0; qx != m_r_break_roi_loop; qx++) {
       roi_refine.BreakROIs(iplane, roi_form, qx);
+      if (iplane==1 && qx==1) roi_refine.PrintLooseROIs(iplane, std::string("step1")+=std::to_string(qx));
       roi_refine.CheckROIs(iplane, roi_form);
       roi_refine.CleanUpROIs(iplane);
+      if (iplane==1 && qx==1) roi_refine.PrintLooseROIs(iplane, std::string("step2")+=std::to_string(qx));
       if (m_use_roi_debug_mode) {
         if (qx == 0)
           save_roi(*itraces, break_roi_loop1_traces, iplane,
@@ -1389,8 +1394,10 @@ bool OmnibusSigProc::operator()(const input_pointer& in, output_pointer& out)
     }
 
     roi_refine.ShrinkROIs(iplane, roi_form);
+    if (iplane==1) roi_refine.PrintLooseROIs(iplane, "step3");
     roi_refine.CheckROIs(iplane, roi_form);
     roi_refine.CleanUpROIs(iplane);
+    if (iplane==1) roi_refine.PrintLooseROIs(iplane, "step4");
     if (m_use_roi_debug_mode) {
       save_roi(*itraces, shrink_roi_traces, iplane,
                roi_refine.get_rois_by_plane(iplane));
@@ -1401,7 +1408,9 @@ bool OmnibusSigProc::operator()(const input_pointer& in, output_pointer& out)
     } else {
       roi_refine.CleanUpInductionROIs(iplane);
     }
+    if (iplane==1) roi_refine.PrintLooseROIs(iplane, "step5");
     roi_refine.ExtendROIs(iplane);
+    // if (iplane==1) roi_refine.PrintLooseROIs(iplane, "step6");
 
     if (m_use_roi_debug_mode) {
       save_ext_roi(*itraces, extend_roi_traces, iplane,
